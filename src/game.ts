@@ -112,6 +112,12 @@ export interface MarketTrends {
   [key: string]: MarketTrend
 }
 
+export interface WeeklyHistory {
+  week: number
+  money: number
+  revenue: number
+}
+
 export interface GameState {
   money: number
   week: number
@@ -125,6 +131,10 @@ export interface GameState {
   lastSaleAmount: number
   /** 直近の売上詳細（ポップアップ表示用） */
   lastSaleDetail: { projectName: string; quality: number; price: PriceMultiplier; trendBonus: number } | null
+  /** 週ごとの資金・売上履歴（グラフ描画用） */
+  history: WeeklyHistory[]
+  /** 累計売上 */
+  totalRevenue: number
 }
 
 let nextProjectId = 1
@@ -155,6 +165,8 @@ export function createInitialState(): GameState {
     log: [],
     lastSaleAmount: 0,
     lastSaleDetail: null,
+    history: [{ week: 1, money: INITIAL_MONEY, revenue: 0 }],
+    totalRevenue: 0,
   }
 }
 
@@ -313,6 +325,9 @@ export function advanceWeek(): void {
   // 市場トレンド変動
   updateMarketTrends()
 
+  // 履歴を記録（グラフ描画用）
+  game.history.push({ week: game.week, money: game.money, revenue: 0 })
+
   if (isGameOver()) pushLog('資金が尽きた。スタジオは閉鎖された', 'loss')
 }
 
@@ -407,7 +422,16 @@ export function releaseProject(projectId: string, price: PriceMultiplier): numbe
   project.status = 'released'
   project.revenue = revenue
   game.money += revenue
+  game.totalRevenue += revenue
   game.reputation = clamp(game.reputation + reputationDelta, 0, REPUTATION_CEILING)
+
+  // 直近の週履歴に売上を記録
+  const lastHistory = game.history[game.history.length - 1]
+  if (lastHistory && lastHistory.week === game.week) {
+    lastHistory.revenue += revenue
+  } else {
+    game.history.push({ week: game.week, money: game.money, revenue })
+  }
 
   // ゲーム感フィードバック用：直近売上情報を記録
   game.lastSaleAmount = revenue
@@ -432,4 +456,55 @@ export function resetGame(): void {
   Object.assign(game, createInitialState())
   nextProjectId = 1
   nextLogId = 1
+}
+
+/** 売上推移グラフ用のデータ（週ラベルと売上額） */
+export function getRevenueHistory(): { labels: string[]; data: number[] } {
+  return {
+    labels: game.history.map((h) => `W${String(h.week).padStart(2, '0')}`),
+    data: game.history.map((h) => h.revenue),
+  }
+}
+
+/** 資金推移グラフ用のデータ（週ラベルと資金額） */
+export function getMoneyHistory(): { labels: string[]; data: number[] } {
+  return {
+    labels: game.history.map((h) => `W${String(h.week).padStart(2, '0')}`),
+    data: game.history.map((h) => h.money),
+  }
+}
+
+/** 市場トレンドグラフ用のデータ（ジャンル別人気度・飽和度） */
+export function getMarketTrendData(): {
+  labels: string[]
+  popularity: number[]
+  saturation: number[]
+} {
+  const labels: string[] = []
+  const popularity: number[] = []
+  const saturation: number[] = []
+  for (const genre of GENRES) {
+    const trend = game.marketTrends[genre]
+    if (!trend) continue
+    labels.push(genre)
+    popularity.push(trend.popularity)
+    saturation.push(trend.saturation)
+  }
+  return { labels, popularity, saturation }
+}
+
+/** ジャンル別累計売上（実績・履歴用） */
+export function getGenreRevenue(): { genre: string; revenue: number; count: number }[] {
+  const map: Record<string, { revenue: number; count: number }> = {}
+  for (const project of game.projects) {
+    if (project.status !== 'released') continue
+    if (!map[project.genre]) map[project.genre] = { revenue: 0, count: 0 }
+    map[project.genre].revenue += project.revenue
+    map[project.genre].count += 1
+  }
+  return GENRES.map((genre) => ({
+    genre,
+    revenue: map[genre]?.revenue ?? 0,
+    count: map[genre]?.count ?? 0,
+  }))
 }

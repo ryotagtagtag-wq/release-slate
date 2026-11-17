@@ -7,6 +7,8 @@ import Release from './components/Release.vue'
 import Staff from './components/Staff.vue'
 import Skills from './components/Skills.vue'
 import Market from './components/Market.vue'
+import Analytics from './components/Analytics.vue'
+import History from './components/History.vue'
 import SalePopup from './components/SalePopup.vue'
 import {
   advanceWeek,
@@ -32,6 +34,8 @@ type Screen =
   | 'staff'
   | 'skills'
   | 'market'
+  | 'analytics'
+  | 'history'
 
 const screen = ref<Screen>('dashboard')
 const selectedProjectId = ref<string | null>(null)
@@ -129,7 +133,11 @@ function closeSalePopup(): void {
           </div>
           <div>
             <dt>スタッフ数</dt>
-            <dd>{{ totalStaffCount() }} 名</dd>
+            <dd>{{ game.staff.programmer + game.staff.designer }} 名</dd>
+          </div>
+          <div>
+            <dt>累計売上</dt>
+            <dd>{{ game.totalRevenue.toLocaleString('ja-JP') }} 円</dd>
           </div>
           <div>
             <dt>最終資金</dt>
@@ -194,6 +202,16 @@ function closeSalePopup(): void {
         @back="screen = 'dashboard'"
       />
 
+      <Analytics
+        v-else-if="screen === 'analytics'"
+        @back="screen = 'dashboard'"
+      />
+
+      <History
+        v-else-if="screen === 'history'"
+        @back="screen = 'dashboard'"
+      />
+
       <Dashboard
         v-else
         :money="game.money"
@@ -211,6 +229,8 @@ function closeSalePopup(): void {
         @goto-staff="screen = 'staff'"
         @goto-skills="screen = 'skills'"
         @goto-market="screen = 'market'"
+        @goto-analytics="screen = 'analytics'"
+        @goto-history="screen = 'history'"
       />
     </main>
   </div>
@@ -245,6 +265,7 @@ function closeSalePopup(): void {
     radial-gradient(circle at 6% -14%, rgba(170, 59, 255, 0.14), transparent 46%),
     radial-gradient(circle at 98% 2%, rgba(198, 240, 75, 0.24), transparent 38%);
   background-repeat: no-repeat;
+  min-height: 100vh;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -325,13 +346,13 @@ function closeSalePopup(): void {
   flex-direction: column;
   flex: 1;
   padding-top: 26px;
-  animation: screen-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: screen-in 450ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes screen-in {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
