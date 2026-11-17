@@ -2,17 +2,23 @@
 import { computed } from 'vue'
 import {
   WEEKLY_STAFF_COST,
+  STAFF_WEEKLY_SALARY,
   formatYen,
   weeksRemaining,
+  trendMultiplier,
   type LogEntry,
   type Project,
   type ProjectStatus,
+  type Staff,
+  type Skills,
 } from '../game'
 
 const props = defineProps<{
   money: number
   week: number
   reputation: number
+  staff: Staff
+  skills: Skills
   projects: Project[]
   releasedProjects: Project[]
   log: LogEntry[]
@@ -23,6 +29,9 @@ const emit = defineEmits<{
   'new-project': []
   'open-project': [projectId: string]
   'start-project': [projectId: string]
+  'goto-staff': []
+  'goto-skills': []
+  'goto-market': []
 }>()
 
 const statusLabels: Record<ProjectStatus, string> = {
@@ -34,7 +43,12 @@ const statusLabels: Record<ProjectStatus, string> = {
 const developingCount = computed(
   () => props.projects.filter((project) => project.status === 'development').length,
 )
-const weeklyCost = computed(() => developingCount.value * WEEKLY_STAFF_COST)
+const totalStaff = computed(() => props.staff.programmer + props.staff.designer)
+const weeklyPayroll = computed(
+  () =>
+    props.staff.programmer * STAFF_WEEKLY_SALARY.programmer +
+    props.staff.designer * STAFF_WEEKLY_SALARY.designer,
+)
 
 function progressText(project: Project): string {
   if (project.status === 'planning') return '開発開始待ち'
@@ -52,7 +66,7 @@ function progressText(project: Project): string {
         <p class="stat-label">資金 / Cash</p>
         <p class="stat-value" :class="{ 'is-negative': money < 0 }">{{ formatYen(money) }}</p>
         <p class="stat-note">
-          週次コスト {{ formatYen(weeklyCost) }}（開発中 {{ developingCount }} 件）
+          週次コスト {{ formatYen(weeklyPayroll) }}、開発中 {{ developingCount }} 件
         </p>
       </article>
 
@@ -71,6 +85,20 @@ function progressText(project: Project): string {
           <span :style="{ width: `${reputation}%` }" />
         </div>
       </article>
+
+      <article class="stat stat--staff">
+        <p class="stat-label">スタッフ / Staff</p>
+        <p class="stat-value">{{ totalStaff }} 名</p>
+        <p class="stat-note">週給 {{ formatYen(weeklyPayroll) }}</p>
+      </article>
+
+      <article class="stat stat--skills">
+        <p class="stat-label">スキル / Skills</p>
+        <p class="stat-value">
+          P{{ skills.program }} D{{ skills.design }} S{{ skills.sound }} Pl{{ skills.plan }}
+        </p>
+        <p class="stat-note">研修で成長</p>
+      </article>
     </section>
 
     <section class="actions">
@@ -78,7 +106,10 @@ function progressText(project: Project): string {
         1週間進める <span class="arrow" aria-hidden="true">→</span>
       </button>
       <button type="button" class="btn" @click="emit('new-project')">新規開発</button>
-      <p class="actions-note">週を進めると開発が進行し、開発中の各プロジェクトに給与が発生する。</p>
+      <button type="button" class="btn" @click="emit('goto-staff')">スタッフ</button>
+      <button type="button" class="btn" @click="emit('goto-skills')">スキル</button>
+      <button type="button" class="btn" @click="emit('goto-market')">市場</button>
+      <p class="actions-note">週を進めると開発が進行し、スタッフ給与が発生し、市場トレンドが変動する。</p>
     </section>
 
     <div class="columns">
@@ -158,6 +189,26 @@ function progressText(project: Project): string {
         </li>
       </ul>
     </section>
+
+    <section class="panel panel--market">
+      <header class="panel-head">
+        <h2>市場トレンド（簡易）</h2>
+        <button type="button" class="link-btn" @click="emit('goto-market')">詳細 →</button>
+      </header>
+      <ul class="market-list">
+        <li
+          v-for="genre in ['パズル', 'アクション', 'RPG', 'シミュレーション']"
+          :key="genre"
+          class="market-item"
+        >
+          <span class="market-genre">{{ genre }}</span>
+          <span class="market-ratio">{{ trendMultiplier(genre).toFixed(2) }}x</span>
+          <span class="market-tag" :class="{ hot: trendMultiplier(genre) > 1.05, cold: trendMultiplier(genre) < 0.95 }">
+            {{ trendMultiplier(genre) > 1.05 ? '人気' : trendMultiplier(genre) < 0.95 ? '飽和' : '安定' }}
+          </span>
+        </li>
+      </ul>
+    </section>
   </div>
 </template>
 
@@ -181,7 +232,7 @@ function progressText(project: Project): string {
 
 .stats {
   display: grid;
-  grid-template-columns: 1.5fr 0.72fr 1.1fr;
+  grid-template-columns: repeat(3, 1fr);
   border: 1px solid var(--rule);
   background: var(--paper);
 }
@@ -202,6 +253,14 @@ function progressText(project: Project): string {
 
 .stat:nth-child(3) {
   animation-delay: 120ms;
+}
+
+.stat:nth-child(4) {
+  animation-delay: 180ms;
+}
+
+.stat:nth-child(5) {
+  animation-delay: 240ms;
 }
 
 @keyframes rise {
@@ -227,7 +286,7 @@ function progressText(project: Project): string {
 .stat-value {
   margin: 8px 0 6px;
   font-family: var(--font-display);
-  font-size: clamp(24px, 3.2vw, 38px);
+  font-size: clamp(20px, 3vw, 30px);
   font-weight: 500;
   line-height: 1;
   letter-spacing: -0.04em;
@@ -247,7 +306,7 @@ function progressText(project: Project): string {
 
 .stat-note {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 
@@ -269,7 +328,7 @@ function progressText(project: Project): string {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .actions-note {
@@ -283,11 +342,11 @@ function progressText(project: Project): string {
 
 .btn {
   font-family: var(--font-display);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 14px 22px;
+  padding: 12px 18px;
   border: 1px solid var(--ink);
   background: transparent;
   color: var(--ink);
@@ -597,6 +656,67 @@ function progressText(project: Project): string {
   color: var(--panel-soft);
 }
 
+.panel--market {
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  padding: 20px 24px 24px;
+}
+
+.market-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.market-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--rule);
+  font-size: 13px;
+}
+
+.market-item:last-child {
+  border-bottom: none;
+}
+
+.market-genre {
+  font-family: var(--font-body);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.market-ratio {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+.market-tag {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+}
+
+.market-tag.hot {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.market-tag.cold {
+  border-color: var(--alert);
+  color: var(--alert);
+}
+
 @media (max-width: 900px) {
   .stats {
     grid-template-columns: 1fr;
@@ -611,8 +731,17 @@ function progressText(project: Project): string {
     border-bottom: none;
   }
 
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn {
+    width: 100%;
+  }
+
   .actions-note {
-    margin: 0;
+    margin: 10px 0 0;
     max-width: none;
     text-align: left;
   }

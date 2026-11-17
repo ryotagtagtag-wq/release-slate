@@ -4,22 +4,38 @@ import Dashboard from './components/Dashboard.vue'
 import Development from './components/Development.vue'
 import NewProject from './components/NewProject.vue'
 import Release from './components/Release.vue'
+import Staff from './components/Staff.vue'
+import Skills from './components/Skills.vue'
+import Market from './components/Market.vue'
+import SalePopup from './components/SalePopup.vue'
 import {
   advanceWeek,
   beginDevelopment,
+  fireStaff,
   game,
+  hireStaff,
   isGameOver,
   releaseProject,
   resetGame,
   startNewProject,
+  trainSkill,
   type Genre,
   type PriceMultiplier,
 } from './game'
 
-type Screen = 'dashboard' | 'new-project' | 'development' | 'release' | 'gameover'
+type Screen =
+  | 'dashboard'
+  | 'new-project'
+  | 'development'
+  | 'release'
+  | 'gameover'
+  | 'staff'
+  | 'skills'
+  | 'market'
 
 const screen = ref<Screen>('dashboard')
 const selectedProjectId = ref<string | null>(null)
+const showSalePopup = ref(false)
 
 const selectedProject = computed(
   () => game.projects.find((project) => project.id === selectedProjectId.value) ?? null,
@@ -68,13 +84,19 @@ function handleSell(price: PriceMultiplier): void {
   if (!selectedProject.value) return
   releaseProject(selectedProject.value.id, price)
   selectedProjectId.value = null
+  showSalePopup.value = true
   screen.value = 'dashboard'
 }
 
 function handleRestart(): void {
   resetGame()
   selectedProjectId.value = null
+  showSalePopup.value = false
   screen.value = 'dashboard'
+}
+
+function closeSalePopup(): void {
+  showSalePopup.value = false
 }
 </script>
 
@@ -106,6 +128,10 @@ function handleRestart(): void {
             <dd>{{ releasedCount }} 本</dd>
           </div>
           <div>
+            <dt>スタッフ数</dt>
+            <dd>{{ totalStaffCount() }} 名</dd>
+          </div>
+          <div>
             <dt>最終資金</dt>
             <dd>{{ game.money.toLocaleString('ja-JP') }} 円</dd>
           </div>
@@ -114,6 +140,13 @@ function handleRestart(): void {
           最初からやり直す
         </button>
       </section>
+
+      <SalePopup
+        v-if="showSalePopup && game.lastSaleDetail"
+        :amount="game.lastSaleAmount"
+        :detail="game.lastSaleDetail"
+        @close="closeSalePopup"
+      />
 
       <NewProject
         v-else-if="screen === 'new-project'"
@@ -138,11 +171,36 @@ function handleRestart(): void {
         @back="screen = 'development'"
       />
 
+      <Staff
+        v-else-if="screen === 'staff'"
+        :money="game.money"
+        :staff="game.staff"
+        @hire="handleHire"
+        @fire="handleFire"
+        @back="screen = 'dashboard'"
+      />
+
+      <Skills
+        v-else-if="screen === 'skills'"
+        :money="game.money"
+        :skills="game.skills"
+        @train="handleTrain"
+        @back="screen = 'dashboard'"
+      />
+
+      <Market
+        v-else-if="screen === 'market'"
+        :trends="game.marketTrends"
+        @back="screen = 'dashboard'"
+      />
+
       <Dashboard
         v-else
         :money="game.money"
         :week="game.week"
         :reputation="game.reputation"
+        :staff="game.staff"
+        :skills="game.skills"
         :projects="activeProjects"
         :released-projects="releasedProjects"
         :log="game.log"
@@ -150,6 +208,9 @@ function handleRestart(): void {
         @new-project="screen = 'new-project'"
         @open-project="handleOpenProject"
         @start-project="handleStartProject"
+        @goto-staff="screen = 'staff'"
+        @goto-skills="screen = 'skills'"
+        @goto-market="screen = 'market'"
       />
     </main>
   </div>
