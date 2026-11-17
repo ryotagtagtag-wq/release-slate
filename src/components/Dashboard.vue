@@ -34,6 +34,7 @@ const emit = defineEmits<{
   'goto-market': []
   'goto-analytics': []
   'goto-history': []
+  'goto-saveload': []
 }>()
 
 const statusLabels: Record<ProjectStatus, string> = {
@@ -113,6 +114,7 @@ function progressText(project: Project): string {
       <button type="button" class="btn" @click="emit('goto-market')">市場</button>
       <button type="button" class="btn" @click="emit('goto-analytics')">グラフ</button>
       <button type="button" class="btn" @click="emit('goto-history')">履歴</button>
+      <button type="button" class="btn" @click="emit('goto-saveload')">セーブ/ロード</button>
       <p class="actions-note">週を進めると開発が進行し、スタッフ給与が発生し、市場トレンドが変動する。</p>
     </section>
 

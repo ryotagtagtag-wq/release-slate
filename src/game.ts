@@ -508,3 +508,127 @@ export function getGenreRevenue(): { genre: string; revenue: number; count: numb
     count: map[genre]?.count ?? 0,
   }))
 }
+
+/** ---------- IndexedDB セーブ / ロード ---------- */
+
+const DB_NAME = 'release-slate'
+const DB_VERSION = 1
+const STORE_NAME = 'game-save'
+const SAVE_KEY = 'main'
+
+let dbPromise: Promise<IDBDatabase> | null = null
+
+function openDb(): Promise<IDBDatabase> {
+  if (dbPromise) return dbPromise
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION)
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(STORE_NAME, { keyPath: 'id' })
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+  return dbPromise
+}
+
+/** セーブデータが存在するか */
+export async function hasSaveData(): Promise<boolean> {
+  try {
+    const db = await openDb()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly')
+      const store = tx.objectStore(STORE_NAME)
+      const req = store.get(SAVE_KEY)
+      req.onsuccess = () => resolve(!!req.result)
+      req.onerror = () => reject(req.error)
+    })
+  } catch {
+    return false
+  }
+}
+
+/** ゲーム状態を IndexedDB に保存 */
+export async function saveGame(): Promise<void> {
+  const db = await openDb()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    const store = tx.objectStore(STORE_NAME)
+    const payload = {
+      id: SAVE_KEY,
+      state: {
+        money: game.money,
+        week: game.week,
+        reputation: game.reputation,
+        staff: { ...game.staff },
+        skills: { ...game.skills },
+        projects: game.projects.map((p) => ({ ...p })),
+        marketTrends: { ...game.marketTrends },
+        log: game.log.map((l) => ({ ...l })),
+        lastSaleAmount: game.lastSaleAmount,
+        lastSaleDetail: game.lastSaleDetail ? { ...game.lastSaleDetail } : null,
+        history: game.history.map((h) => ({ ...h })),
+        totalRevenue: game.totalRevenue,
+      },
+      nextProjectId,
+      nextLogId,
+      savedAt: Date.now(),
+    }
+    const req = store.put(payload)
+    req.onsuccess = () => resolve()
+    req.onerror = () => reject(req.error)
+  })
+}
+
+/** ゲーム状態を IndexedDB から復元。データがない場合は false を返す */
+export async function loadGame(): Promise<boolean> {
+  const exists = await hasSaveData()
+  if (!exists) return false
+
+  const db = await openDb()
+  const payload = await new Promise<any>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly')
+    const store = tx.objectStore(STORE_NAME)
+    const req = store.get(SAVE_KEY)
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+
+  if (!payload || !payload.state) return false
+
+  const { state, nextProjectId: pid, nextLogId: lid } = payload
+  Object.assign(game, {
+    money: state.money,
+    week: state.week,
+    reputation: state.reputation,
+    staff: { ...state.staff },
+    skills: { ...state.skills },
+    projects: state.projects.map((p: any) => ({ ...p })),
+    marketTrends: { ...state.marketTrends },
+    log: state.log.map((l: any) => ({ ...l })),
+    lastSaleAmount: state.lastSaleAmount ?? 0,
+    lastSaleDetail: state.lastSaleDetail ?? null,
+    history: state.history?.map((h: any) => ({ ...h })) ?? [
+      { week: 1, money: INITIAL_MONEY, revenue: 0 },
+    ],
+    totalRevenue: state.totalRevenue ?? 0,
+  })
+  nextProjectId = pid ?? 1
+  nextLogId = lid ?? 1
+  return true
+}
+
+/** セーブデータを削除 */
+export async function deleteSaveData(): Promise<void> {
+  try {
+    const db = await openDb()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite')
+      const store = tx.objectStore(STORE_NAME)
+      const req = store.delete(SAVE_KEY)
+      req.onsuccess = () => resolve()
+      req.onerror = () => reject(req.error)
+    })
+  } catch {
+    // 既に削除済みなどは無視
+  }
+}

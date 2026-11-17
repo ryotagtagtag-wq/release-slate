@@ -9,6 +9,7 @@ import Skills from './components/Skills.vue'
 import Market from './components/Market.vue'
 import Analytics from './components/Analytics.vue'
 import History from './components/History.vue'
+import SaveLoad from './components/SaveLoad.vue'
 import SalePopup from './components/SalePopup.vue'
 import {
   advanceWeek,
@@ -36,6 +37,7 @@ type Screen =
   | 'market'
   | 'analytics'
   | 'history'
+  | 'save-load'
 
 const screen = ref<Screen>('dashboard')
 const selectedProjectId = ref<string | null>(null)
@@ -209,6 +211,11 @@ function closeSalePopup(): void {
 
       <History
         v-else-if="screen === 'history'"
+        @back="screen = 'dashboard'"
+      />
+
+      <SaveLoad
+        v-else-if="screen === 'save-load'"
         @back="screen = 'dashboard'"
       />
 
